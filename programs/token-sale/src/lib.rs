@@ -1,10 +1,12 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Mint, TokenAccount, Token};
+use anchor_spl::token::{self, Mint, TokenAccount, Token, Transfer, SetAuthority, spl_token::instruction::AuthorityType, spl_token::instruction::transfer};
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
 #[program]
 pub mod token_sale {
+    use anchor_lang::solana_program::program::invoke;
+
     use super::*;
 
     /// Used by the admin user to create an escrow account holding tokens
@@ -16,12 +18,25 @@ pub mod token_sale {
 
         escrow.admin = *ctx.accounts.user.key;
         escrow.name = name;
-        escrow.token_holder = *ctx.accounts.token_holder.to_account_info().key;
+        escrow.escrow_token_account = *ctx.accounts.escrow_token_account.to_account_info().key;
         escrow.total_token_availability = supply;
         escrow.exchange_rate = rate;
         escrow.bump = bump;
 
-        Ok(())
+        let ix = transfer(
+            &ctx.accounts.token_program.key, 
+            &ctx.accounts.admin_depositing_token_account.to_account_info().key, 
+            &ctx.accounts.escrow_token_account.to_account_info().key, 
+            &ctx.accounts.admin_depositing_token_account.to_account_info().key, 
+            &[], 
+            supply
+        )?;
+        let transfer_result = invoke(
+            &ix, 
+            &[ctx.accounts.admin_depositing_token_account.to_account_info(), ctx.accounts.escrow_token_account.to_account_info(), ctx.accounts.admin_depositing_token_account.to_account_info()]
+        );
+
+        Ok(transfer_result?)
     }
 
     /// Used by the admin user to cancel an existing escrow account holding tokens
@@ -36,7 +51,7 @@ pub mod token_sale {
 }
 
 #[derive(Accounts)]
-#[instruction(name: String)]
+#[instruction(name: String, supply: u64)]
 pub struct Initialize<'info> {
     #[account(
         init, 
@@ -49,13 +64,18 @@ pub struct Initialize<'info> {
     mint: Account<'info, Mint>,
     #[account(
         init,
-        seeds = [b"token_holder".as_ref()],
+        seeds = [b"escrow_token_account".as_ref()],
         bump,
         payer = user,
         token::mint = mint,
-        token::authority = user,
+        token::authority = escrow,
     )]
-    token_holder: Account<'info, TokenAccount>,
+    escrow_token_account: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        constraint = admin_depositing_token_account.amount >= supply
+    )]
+    admin_depositing_token_account: Account<'info, TokenAccount>,
     #[account(mut)]
     user: Signer<'info>,
     system_program: Program<'info, System>, 
@@ -92,7 +112,7 @@ pub struct Exchange<'info> {
 #[account]
 pub struct EscrowAccount {
     pub admin: Pubkey, // the user that created the token sale
-    pub token_holder: Pubkey, // the address created to hold the tokens for sale
+    pub escrow_token_account: Pubkey, // the address created to hold the tokens for sale
     pub name: String,
     pub exchange_rate: u64, // the number of tokens that can be bought for 1 SOL
     pub total_token_availability: u64,
