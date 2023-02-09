@@ -1,6 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { BN } from "bn.js";
+import { BN, min } from "bn.js";
 import * as assert from "assert"
 import { TokenSale } from "../target/types/token_sale";
 import { PublicKey } from "@solana/web3.js";
@@ -24,14 +24,13 @@ describe("token-sale", () => {
   // Known seeds
   const escrowSeed = 'escrow_pda';
   const encodedEscrowSeed = [anchor.utils.bytes.utf8.encode(escrowSeed)];
-  const escrowTokenAccountSeed = 'escrow_token_account';
-  const encodedEscrowTokenAccountSeed = [anchor.utils.bytes.utf8.encode(escrowTokenAccountSeed)];
 
   // PDA
   const [escrowAccountPubkey] = anchor.web3.PublicKey.findProgramAddressSync(encodedEscrowSeed, program.programId);
 
   // PDA owned token account
-  const [escrowTokenAccountPubkey] = anchor.web3.PublicKey.findProgramAddressSync(encodedEscrowTokenAccountSeed, program.programId);
+  // TODO this should be derived from the seeds used in the definition, see example at https://spl.solana.com/associated-token-account#finding-the-associated-token-account-address
+  let escrowTokenAccountPubkey = null;
 
   const name = 'Test Escrow';
   const rate = new BN(100);
@@ -63,7 +62,15 @@ describe("token-sale", () => {
     const adminAssociatedTokenAccount = await getOrCreateAssociatedTokenAccount(provider.connection, admin, mint, admin.publicKey);
     const tokenAccountInfo = await getAccount(provider.connection, adminAssociatedTokenAccount.address);
     assert.equal(supply, tokenAccountInfo.amount);
-  })
+    escrowTokenAccountPubkey = PublicKey.findProgramAddressSync(
+      [
+        provider.wallet.publicKey.toBuffer(),
+        TOKEN_PROGRAM_ID.toBuffer(),
+        mintInfo.address.toBuffer()
+      ],
+      program.programId
+    );
+  });
 
 
   it("Can create a new escrow account!", async () => {
