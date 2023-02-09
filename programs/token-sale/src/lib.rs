@@ -111,8 +111,6 @@ pub struct Initialize<'info> {
     pub admin_token_account: Account<'info, TokenAccount>, // the token account of the admin who is creating the token sale (should already exist)
     #[account(
         init,
-        seeds = [b"escrow_token_account".as_ref()],
-        bump,
         payer = admin,
         token::mint = mint,
         token::authority = escrow_pda,
