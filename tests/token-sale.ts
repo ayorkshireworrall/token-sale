@@ -81,9 +81,10 @@ describe("token-sale", () => {
         saleTokenAccount: escrowTokenAccountPubkey,
         adminTokenAccount: adminTokenAccount,
         mint: mint,
-        admin: provider.wallet.publicKey,
+        admin: admin.publicKey,
         systemProgram: SystemProgram.programId
       })
+      .signers([admin])
       .rpc();
 
     const escrowAccount = await program.account.escrowAccount.fetch(escrowAccountPubkey);
