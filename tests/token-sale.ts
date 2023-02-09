@@ -20,16 +20,17 @@ describe("token-sale", () => {
 
   // Required Keys
   const admin = anchor.web3.Keypair.generate();
-  const mintAuthority = anchor.web3.Keypair.generate();
 
   // Known seeds
-  const escrowSeed = 'escrow';
+  const escrowSeed = 'escrow_pda';
   const encodedEscrowSeed = [anchor.utils.bytes.utf8.encode(escrowSeed)];
   const escrowTokenAccountSeed = 'escrow_token_account';
   const encodedEscrowTokenAccountSeed = [anchor.utils.bytes.utf8.encode(escrowTokenAccountSeed)];
 
-  // PDAs
+  // PDA
   const [escrowAccountPubkey] = anchor.web3.PublicKey.findProgramAddressSync(encodedEscrowSeed, program.programId);
+
+  // PDA owned token account
   const [escrowTokenAccountPubkey] = anchor.web3.PublicKey.findProgramAddressSync(encodedEscrowTokenAccountSeed, program.programId);
 
   const name = 'Test Escrow';
@@ -50,13 +51,13 @@ describe("token-sale", () => {
     );
 
     // dummy token mint
-    mint = await createMint(provider.connection, admin, mintAuthority.publicKey, null, 0);
+    mint = await createMint(provider.connection, admin, admin.publicKey, null, 0);
 
     // create a token account for admin so they can hold the token minted above
     adminTokenAccount = await createAccount(provider.connection, admin, mint, admin.publicKey);
 
     // mint dummy token to admin account with the amount specified in supply
-    await mintTo(provider.connection, admin, mint, adminTokenAccount, mintAuthority, supply);
+    await mintTo(provider.connection, admin, mint, adminTokenAccount, admin, supply);
     const mintInfo = await getMint(provider.connection, mint);
     assert.equal(supply, mintInfo.supply);
     const adminAssociatedTokenAccount = await getOrCreateAssociatedTokenAccount(provider.connection, admin, mint, admin.publicKey);
@@ -81,7 +82,7 @@ describe("token-sale", () => {
     const escrowAccount = await program.account.escrowAccount.fetch(escrowAccountPubkey);
     // assert.ok(escrowAccount.name === name);
     // assert.ok(escrowAccount.exchangeRate.eq(rate));
-    // assert.ok(escrowAccount.totalTokenAvailability.eq(supplyBN));
+    assert.ok(escrowAccount.amount.eq(supplyBN));
     // assert.ok(escrowAccount.admin.equals(provider.wallet.publicKey));
   });
 });

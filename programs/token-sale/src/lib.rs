@@ -17,38 +17,66 @@ pub mod token_sale {
         let escrow = &mut ctx.accounts.escrow_pda;
         let bump = *ctx
             .bumps
-            .get("escrow")
+            .get("escrow_pda")
             .ok_or(TokenSaleError::CannotGetEscrowBump)?;
 
         escrow.bump = bump;
 
-        let depositing_account = &mut ctx.accounts.admin_token_account.key();
-        let sender = &ctx.accounts.admin;
-        // let bump_le_bytes = bump.to_le_bytes();
-        let inner_seeds = vec![
-            sender.key.as_ref(),
-            depositing_account.as_ref(),
-            "escrow".as_ref(),
-            // bump_le_bytes.as_ref(),
-        ];
-        let outer_seeds = vec![inner_seeds.as_slice()];
+        // let depositing_account = &mut ctx.accounts.admin_token_account.key(); // the admin's token account from which tokens will be transferred
+        // let sender = &ctx.accounts.admin; // the admin's wallet used for signing the transaction
+        // let bump_vector = bump.to_le_bytes();
+        // let inner_seeds = vec![
+        //     sender.key.as_ref(),
+        //     depositing_account.as_ref(),
+        //     "escrow_pda".as_ref(),
+        //     bump_vector.as_ref(),
+        // ];
+        // let outer_seeds = vec![inner_seeds.as_slice()];
 
-        let ix = Transfer {
+        // let ix = Transfer {
+        //     from: ctx.accounts.admin_token_account.to_account_info(),
+        //     to: ctx.accounts.sale_token_account.to_account_info(),
+        //     authority: sender.to_account_info(),
+        // };
+
+        // let cpi_ctx = CpiContext::new_with_signer(
+        //     ctx.accounts.token_program.to_account_info(),
+        //     ix,
+        //     outer_seeds.as_slice(),
+        // );
+
+        // anchor_spl::token::transfer(cpi_ctx, amount)?;
+        // escrow.amount = amount;
+
+        // let ix = transfer(
+        //     &ctx.accounts.token_program.key, // the token program key (for )
+        //     &ctx.accounts.admin_token_account.to_account_info().key,
+        //     &ctx.accounts.sale_token_account.to_account_info().key,
+        //     &ctx.accounts.admin_token_account.to_account_info().key,
+        //     &[],
+        //     amount,
+        // )?;
+
+        // let transfer_result = invoke(
+        //     &ix,
+        //     &[
+        //         ctx.accounts.admin_token_account.to_account_info(),
+        //         ctx.accounts.sale_token_account.to_account_info(),
+        //         ctx.accounts.token_program.to_account_info(),
+        //         ctx.accounts.system_program.to_account_info(),
+        //     ],
+        // );
+
+        let cpi_accounts = Transfer {
             from: ctx.accounts.admin_token_account.to_account_info(),
             to: ctx.accounts.sale_token_account.to_account_info(),
-            authority: sender.to_account_info(),
+            authority: ctx.accounts.admin.to_account_info(),
         };
+        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
 
-        let cpi_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            ix,
-            outer_seeds.as_slice(),
-        );
+        let transfer_result = token::transfer(cpi_ctx, amount);
 
-        anchor_spl::token::transfer(cpi_ctx, amount)?;
-        escrow.amount = amount;
-
-        Ok(())
+        Ok(transfer_result?)
     }
 
     /// Used by the admin user to cancel an existing escrow account holding tokens
@@ -68,7 +96,7 @@ pub struct Initialize<'info> {
     #[account(
         init,
         payer = admin,
-        seeds=[b"escrow".as_ref()],
+        seeds=[b"escrow_pda".as_ref()],
         bump,
         space=200
     )]
