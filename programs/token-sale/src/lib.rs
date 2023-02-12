@@ -55,7 +55,7 @@ pub struct Initialize<'info> {
     #[account(
         init,
         payer = admin,
-        seeds=[b"escrow_pda".as_ref(), name.as_bytes().as_ref()],
+        seeds = [b"escrow_pda".as_ref(), name.as_bytes().as_ref()],
         bump,
         space=EscrowAccount::space()
     )]
@@ -83,6 +83,17 @@ pub struct Initialize<'info> {
 #[instruction(name: String)]
 pub struct Cancel<'info> {
     pub admin: Signer<'info>,
+    #[account(
+        mut, 
+        seeds = [b"escrow_pda".as_ref(), name.as_bytes().as_ref()],
+        bump
+    )]
+    pub escrow_pda: Account<'info, EscrowAccount>,
+    #[account(mut)]
+    pub sale_token_account: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub admin_token_account: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>
     // TODO
 }
 
@@ -90,6 +101,15 @@ pub struct Cancel<'info> {
 #[instruction(name: String)]
 pub struct Exchange<'info> {
     pub user: Signer<'info>,
+    #[account(
+        mut, 
+        seeds = [b"escrow_pda".as_ref(), name.as_bytes().as_ref()],
+        bump
+    )]
+    pub escrow_pda: Account<'info, EscrowAccount>,
+    #[account(mut)]
+    pub sale_token_account: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>
     // TODO
 }
 
