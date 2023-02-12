@@ -1,40 +1,39 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Mint, TokenAccount, Token, Transfer, SetAuthority, spl_token::instruction::AuthorityType, spl_token::instruction::transfer};
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
 #[program]
 pub mod token_sale {
-    use anchor_lang::solana_program::program::invoke;
 
     use super::*;
 
     /// Used by the admin user to create an escrow account holding tokens
-    pub fn initialize(ctx: Context<Initialize>, name: String, rate: u64, supply: u64) -> Result<()> {
-        // TODO check that user's account has at least as many tokens as in the supply
-        
-        let escrow = &mut ctx.accounts.escrow;
-        let bump = *ctx.bumps.get("escrow").ok_or(TokenSaleError::CannotGetEscrowBump)?;
+    pub fn initialize(
+        ctx: Context<Initialize>,
+        amount: u64,
+        rate: u64,
+        name: String,
+    ) -> Result<()> {
+        let escrow = &mut ctx.accounts.escrow_pda;
+        let bump = *ctx
+            .bumps
+            .get("escrow_pda")
+            .ok_or(TokenSaleError::CannotGetEscrowBump)?;
 
-        escrow.admin = *ctx.accounts.user.key;
-        escrow.name = name;
-        escrow.escrow_token_account = *ctx.accounts.escrow_token_account.to_account_info().key;
-        escrow.total_token_availability = supply;
-        escrow.exchange_rate = rate;
         escrow.bump = bump;
 
-        let ix = transfer(
-            &ctx.accounts.token_program.key, 
-            &ctx.accounts.admin_depositing_token_account.to_account_info().key, 
-            &ctx.accounts.escrow_token_account.to_account_info().key, 
-            &ctx.accounts.admin_depositing_token_account.to_account_info().key, 
-            &[], 
-            supply
-        )?;
-        let transfer_result = invoke(
-            &ix, 
-            &[ctx.accounts.admin_depositing_token_account.to_account_info(), ctx.accounts.escrow_token_account.to_account_info(), ctx.accounts.admin_depositing_token_account.to_account_info()]
-        );
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.admin_token_account.to_account_info(),
+            to: ctx.accounts.sale_token_account.to_account_info(),
+            authority: ctx.accounts.admin.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
+
+        let transfer_result = token::transfer(cpi_ctx, amount);
+        escrow.amount = amount;
+        escrow.rate = rate;
+        escrow.name = name;
 
         Ok(transfer_result?)
     }
@@ -51,72 +50,61 @@ pub mod token_sale {
 }
 
 #[derive(Accounts)]
-#[instruction(name: String, supply: u64)]
+#[instruction(supply: u64, _rate: u64, name: String)]
 pub struct Initialize<'info> {
     #[account(
-        init, 
-        payer=user, 
-        space=9000, 
-        seeds=[b"escrow"],
-        bump
-    )]
-    escrow: Account<'info, EscrowAccount>,
-    mint: Account<'info, Mint>,
-    #[account(
         init,
-        seeds = [b"escrow_token_account".as_ref()],
+        payer = admin,
+        seeds=[b"escrow_pda".as_ref(), name.as_bytes().as_ref()],
         bump,
-        payer = user,
-        token::mint = mint,
-        token::authority = escrow,
+        space=EscrowAccount::space()
     )]
-    escrow_token_account: Account<'info, TokenAccount>,
+    pub escrow_pda: Account<'info, EscrowAccount>,
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    pub mint: Account<'info, Mint>,
     #[account(
         mut,
-        constraint = admin_depositing_token_account.amount >= supply
+        constraint = admin_token_account.amount >= supply
     )]
-    admin_depositing_token_account: Account<'info, TokenAccount>,
-    #[account(mut)]
-    user: Signer<'info>,
-    system_program: Program<'info, System>, 
-    token_program: Program<'info, Token>,
+    pub admin_token_account: Account<'info, TokenAccount>, // the token account of the admin who is creating the token sale (should already exist)
+    #[account(
+        init,
+        payer = admin,
+        token::mint = mint,
+        token::authority = escrow_pda,
+    )]
+    pub sale_token_account: Account<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
 #[instruction(name: String)]
 pub struct Cancel<'info> {
-    #[account(
-        mut,
-        seeds=[b"escrow"],
-        bump
-    )]
-    escrow: Account<'info, EscrowAccount>,
-    #[account(mut)]
-    pub user: Signer<'info>,
+    pub admin: Signer<'info>,
+    // TODO
 }
 
 #[derive(Accounts)]
 #[instruction(name: String)]
 pub struct Exchange<'info> {
-    #[account(
-        mut,
-        seeds=[b"escrow"],
-        bump
-    )]
-    escrow: Account<'info, EscrowAccount>,
-    #[account(mut)]
     pub user: Signer<'info>,
-    system_program: Program<'info, System>, 
+    // TODO
 }
 
 #[account]
 pub struct EscrowAccount {
-    pub admin: Pubkey, // the user that created the token sale
-    pub escrow_token_account: Pubkey, // the address created to hold the tokens for sale
-    pub name: String,
-    pub exchange_rate: u64, // the number of tokens that can be bought for 1 SOL
-    pub total_token_availability: u64,
+    pub amount: u64,  // the amount of tokens on sale
+    pub rate: u64,    // the number of tokens that 1 SOL will purchase
+    pub name: String, // a name to act as an identifier
     pub bump: u8,
+}
+
+impl EscrowAccount {
+    pub fn space() -> usize {
+        return 8 + 8 + 8 + 132 + 1; // discriminator + amount + rate + name(128 bytes long) + bump
+    }
 }
 
 #[error_code]

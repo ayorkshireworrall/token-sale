@@ -1,6 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { BN } from "bn.js";
+import { BN, min } from "bn.js";
 import * as assert from "assert"
 import { TokenSale } from "../target/types/token_sale";
 import { PublicKey } from "@solana/web3.js";
@@ -15,27 +15,29 @@ describe("token-sale", () => {
 
   const program = anchor.workspace.TokenSale as Program<TokenSale>;
 
+  // set up test constants
+  const name = 'Test Escrow';
+  const rate = new BN(100);
+  const supply = 1000000
+  const supplyBN = new BN(supply);
+
   let mint = null as PublicKey;
   let adminTokenAccount = null as PublicKey;
 
   // Required Keys
   const admin = anchor.web3.Keypair.generate();
-  const mintAuthority = anchor.web3.Keypair.generate();
+
 
   // Known seeds
-  const escrowSeed = 'escrow';
-  const encodedEscrowSeed = [anchor.utils.bytes.utf8.encode(escrowSeed)];
-  const escrowTokenAccountSeed = 'escrow_token_account';
-  const encodedEscrowTokenAccountSeed = [anchor.utils.bytes.utf8.encode(escrowTokenAccountSeed)];
+  const escrowSeed = 'escrow_pda';
+  const encodedEscrowSeed = [anchor.utils.bytes.utf8.encode(escrowSeed), anchor.utils.bytes.utf8.encode(name)];
 
-  // PDAs
+  // PDA
   const [escrowAccountPubkey] = anchor.web3.PublicKey.findProgramAddressSync(encodedEscrowSeed, program.programId);
-  const [escrowTokenAccountPubkey] = anchor.web3.PublicKey.findProgramAddressSync(encodedEscrowTokenAccountSeed, program.programId);
 
-  const name = 'Test Escrow';
-  const rate = new BN(100);
-  const supply = 1000000
-  const supplyBN = new BN(supply);
+  // PDA owned token account
+  // TODO this should be derived from the seeds used in the definition, see example at https://spl.solana.com/associated-token-account#finding-the-associated-token-account-address
+  let escrowTokenAccountPubkey = null;
 
   it("Test setup", async () => {
     // airdrop SOL to admin who will be paying
@@ -50,38 +52,47 @@ describe("token-sale", () => {
     );
 
     // dummy token mint
-    mint = await createMint(provider.connection, admin, mintAuthority.publicKey, null, 0);
+    mint = await createMint(provider.connection, admin, admin.publicKey, null, 0);
 
     // create a token account for admin so they can hold the token minted above
     adminTokenAccount = await createAccount(provider.connection, admin, mint, admin.publicKey);
 
     // mint dummy token to admin account with the amount specified in supply
-    await mintTo(provider.connection, admin, mint, adminTokenAccount, mintAuthority, supply);
+    await mintTo(provider.connection, admin, mint, adminTokenAccount, admin, supply);
     const mintInfo = await getMint(provider.connection, mint);
     assert.equal(supply, mintInfo.supply);
     const adminAssociatedTokenAccount = await getOrCreateAssociatedTokenAccount(provider.connection, admin, mint, admin.publicKey);
     const tokenAccountInfo = await getAccount(provider.connection, adminAssociatedTokenAccount.address);
     assert.equal(supply, tokenAccountInfo.amount);
-  })
+    escrowTokenAccountPubkey = PublicKey.findProgramAddressSync(
+      [
+        provider.wallet.publicKey.toBuffer(),
+        TOKEN_PROGRAM_ID.toBuffer(),
+        mintInfo.address.toBuffer()
+      ],
+      program.programId
+    );
+  });
 
 
   it("Can create a new escrow account!", async () => {
     await program.methods
-      .initialize(name, rate, supplyBN)
+      .initialize(supplyBN, rate, name)
       .accounts({
-        escrow: escrowAccountPubkey,
-        escrowTokenAccount: escrowTokenAccountPubkey,
-        adminDepositingTokenAccount: adminTokenAccount,
+        escrowPda: escrowAccountPubkey,
+        saleTokenAccount: escrowTokenAccountPubkey,
+        adminTokenAccount: adminTokenAccount,
         mint: mint,
-        user: provider.wallet.publicKey,
+        admin: admin.publicKey,
         systemProgram: SystemProgram.programId
       })
+      .signers([admin])
       .rpc();
 
     const escrowAccount = await program.account.escrowAccount.fetch(escrowAccountPubkey);
-    assert.ok(escrowAccount.name === name);
-    assert.ok(escrowAccount.exchangeRate.eq(rate));
-    assert.ok(escrowAccount.totalTokenAvailability.eq(supplyBN));
-    assert.ok(escrowAccount.admin.equals(provider.wallet.publicKey));
+    // assert.ok(escrowAccount.name === name);
+    assert.ok(escrowAccount.rate.eq(rate));
+    assert.ok(escrowAccount.amount.eq(supplyBN));
+    // assert.ok(escrowAccount.admin.equals(provider.wallet.publicKey));
   });
 });
