@@ -15,15 +15,22 @@ describe("token-sale", () => {
 
   const program = anchor.workspace.TokenSale as Program<TokenSale>;
 
+  // set up test constants
+  const name = 'Test Escrow';
+  const rate = new BN(100);
+  const supply = 1000000
+  const supplyBN = new BN(supply);
+
   let mint = null as PublicKey;
   let adminTokenAccount = null as PublicKey;
 
   // Required Keys
   const admin = anchor.web3.Keypair.generate();
 
+
   // Known seeds
   const escrowSeed = 'escrow_pda';
-  const encodedEscrowSeed = [anchor.utils.bytes.utf8.encode(escrowSeed)];
+  const encodedEscrowSeed = [anchor.utils.bytes.utf8.encode(escrowSeed), anchor.utils.bytes.utf8.encode(name)];
 
   // PDA
   const [escrowAccountPubkey] = anchor.web3.PublicKey.findProgramAddressSync(encodedEscrowSeed, program.programId);
@@ -31,11 +38,6 @@ describe("token-sale", () => {
   // PDA owned token account
   // TODO this should be derived from the seeds used in the definition, see example at https://spl.solana.com/associated-token-account#finding-the-associated-token-account-address
   let escrowTokenAccountPubkey = null;
-
-  const name = 'Test Escrow';
-  const rate = new BN(100);
-  const supply = 1000000
-  const supplyBN = new BN(supply);
 
   it("Test setup", async () => {
     // airdrop SOL to admin who will be paying
@@ -75,7 +77,7 @@ describe("token-sale", () => {
 
   it("Can create a new escrow account!", async () => {
     await program.methods
-      .initialize(supplyBN, rate)
+      .initialize(supplyBN, rate, name)
       .accounts({
         escrowPda: escrowAccountPubkey,
         saleTokenAccount: escrowTokenAccountPubkey,

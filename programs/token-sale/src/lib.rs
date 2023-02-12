@@ -9,7 +9,12 @@ pub mod token_sale {
     use super::*;
 
     /// Used by the admin user to create an escrow account holding tokens
-    pub fn initialize(ctx: Context<Initialize>, amount: u64, rate: u64) -> Result<()> {
+    pub fn initialize(
+        ctx: Context<Initialize>,
+        amount: u64,
+        rate: u64,
+        name: String,
+    ) -> Result<()> {
         let escrow = &mut ctx.accounts.escrow_pda;
         let bump = *ctx
             .bumps
@@ -28,6 +33,7 @@ pub mod token_sale {
         let transfer_result = token::transfer(cpi_ctx, amount);
         escrow.amount = amount;
         escrow.rate = rate;
+        escrow.name = name;
 
         Ok(transfer_result?)
     }
@@ -44,12 +50,12 @@ pub mod token_sale {
 }
 
 #[derive(Accounts)]
-#[instruction(supply: u64)]
+#[instruction(supply: u64, _rate: u64, name: String)]
 pub struct Initialize<'info> {
     #[account(
         init,
         payer = admin,
-        seeds=[b"escrow_pda".as_ref()],
+        seeds=[b"escrow_pda".as_ref(), name.as_bytes().as_ref()],
         bump,
         space=EscrowAccount::space()
     )]
@@ -89,14 +95,15 @@ pub struct Exchange<'info> {
 
 #[account]
 pub struct EscrowAccount {
-    pub amount: u64, // the amount of tokens on sale
-    pub rate: u64,   // the number of tokens that 1 SOL will purchase
+    pub amount: u64,  // the amount of tokens on sale
+    pub rate: u64,    // the number of tokens that 1 SOL will purchase
+    pub name: String, // a name to act as an identifier
     pub bump: u8,
 }
 
 impl EscrowAccount {
     pub fn space() -> usize {
-        return 8 + 8 + 8 + 1; // discriminator + amount + rate + bump
+        return 8 + 8 + 8 + 132 + 1; // discriminator + amount + rate + name(128 bytes long) + bump
     }
 }
 
