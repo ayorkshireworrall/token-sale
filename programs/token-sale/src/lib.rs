@@ -1,19 +1,15 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{
-    self, spl_token::instruction::transfer, spl_token::instruction::AuthorityType, Mint,
-    SetAuthority, Token, TokenAccount, Transfer,
-};
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
 #[program]
 pub mod token_sale {
-    use anchor_lang::solana_program::program::invoke;
 
     use super::*;
 
     /// Used by the admin user to create an escrow account holding tokens
-    pub fn initialize(ctx: Context<Initialize>, amount: u64) -> Result<()> {
+    pub fn initialize(ctx: Context<Initialize>, amount: u64, rate: u64) -> Result<()> {
         let escrow = &mut ctx.accounts.escrow_pda;
         let bump = *ctx
             .bumps
@@ -31,6 +27,7 @@ pub mod token_sale {
 
         let transfer_result = token::transfer(cpi_ctx, amount);
         escrow.amount = amount;
+        escrow.rate = rate;
 
         Ok(transfer_result?)
     }
@@ -54,7 +51,7 @@ pub struct Initialize<'info> {
         payer = admin,
         seeds=[b"escrow_pda".as_ref()],
         bump,
-        space=200
+        space=EscrowAccount::space()
     )]
     pub escrow_pda: Account<'info, EscrowAccount>,
     #[account(mut)]
@@ -92,8 +89,15 @@ pub struct Exchange<'info> {
 
 #[account]
 pub struct EscrowAccount {
-    pub amount: u64,
+    pub amount: u64, // the amount of tokens on sale
+    pub rate: u64,   // the number of tokens that 1 SOL will purchase
     pub bump: u8,
+}
+
+impl EscrowAccount {
+    pub fn space() -> usize {
+        return 8 + 8 + 8 + 1; // discriminator + amount + rate + bump
+    }
 }
 
 #[error_code]

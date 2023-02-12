@@ -75,7 +75,7 @@ describe("token-sale", () => {
 
   it("Can create a new escrow account!", async () => {
     await program.methods
-      .initialize(supplyBN)
+      .initialize(supplyBN, rate)
       .accounts({
         escrowPda: escrowAccountPubkey,
         saleTokenAccount: escrowTokenAccountPubkey,
@@ -89,7 +89,7 @@ describe("token-sale", () => {
 
     const escrowAccount = await program.account.escrowAccount.fetch(escrowAccountPubkey);
     // assert.ok(escrowAccount.name === name);
-    // assert.ok(escrowAccount.exchangeRate.eq(rate));
+    assert.ok(escrowAccount.rate.eq(rate));
     assert.ok(escrowAccount.amount.eq(supplyBN));
     // assert.ok(escrowAccount.admin.equals(provider.wallet.publicKey));
   });
