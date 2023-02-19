@@ -1,10 +1,12 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("FZt4b6KyKDxHiF1bh8Jyv577J5jMWFhrdXddBoH8oB27");
 
 #[program]
 pub mod token_sale {
+
+    use anchor_spl::token::CloseAccount;
 
     use super::*;
 
@@ -40,6 +42,25 @@ pub mod token_sale {
 
     /// Used by the admin user to cancel an existing escrow account holding tokens
     pub fn cancel(ctx: Context<Cancel>, _name: String) -> Result<()> {
+        // transfer any SOL from the escrow PDA to the admin
+        // TODO: transfer all tokens from the sale token account back to the admin
+        let cpi_accounts_transfer = Transfer {
+            from: ctx.accounts.sale_token_account.to_account_info(),
+            to: ctx.accounts.admin_token_account.to_account_info(),
+            authority: ctx.accounts.escrow_pda.to_account_info()
+        };
+        let transfer_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts_transfer);
+
+        token::transfer(transfer_ctx, ctx.accounts.escrow_pda.amount)?;
+
+        // close the escrow account and associated token account
+        let cpi_accounts_close = CloseAccount {
+            account: ctx.accounts.sale_token_account.to_account_info(),
+            destination: ctx.accounts.admin_token_account.to_account_info(),
+            authority: ctx.accounts.escrow_pda.to_account_info()
+        };
+        let close_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts_close);
+        token::close_account(close_ctx);
         Ok(())
     }
 
@@ -86,7 +107,8 @@ pub struct Cancel<'info> {
     #[account(
         mut, 
         seeds = [b"escrow_pda".as_ref(), name.as_bytes().as_ref()],
-        bump
+        bump,
+        close = admin_token_account
     )]
     pub escrow_pda: Account<'info, EscrowAccount>,
     #[account(mut)]
@@ -94,7 +116,6 @@ pub struct Cancel<'info> {
     #[account(mut)]
     pub admin_token_account: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>
-    // TODO
 }
 
 #[derive(Accounts)]
@@ -110,7 +131,6 @@ pub struct Exchange<'info> {
     #[account(mut)]
     pub sale_token_account: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>
-    // TODO
 }
 
 #[account]

@@ -8,7 +8,7 @@ token_sale = "FZt4b6KyKDxHiF1bh8Jyv577J5jMWFhrdXddBoH8oB27"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

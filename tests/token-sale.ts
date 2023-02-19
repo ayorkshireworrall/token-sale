@@ -36,7 +36,6 @@ describe("token-sale", () => {
   const [escrowAccountPubkey] = anchor.web3.PublicKey.findProgramAddressSync(encodedEscrowSeed, program.programId);
 
   // PDA owned token account
-  // TODO this should be derived from the seeds used in the definition, see example at https://spl.solana.com/associated-token-account#finding-the-associated-token-account-address
   let escrowTokenAccountPubkey = null;
 
   it("Test setup", async () => {

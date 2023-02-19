@@ -219,3 +219,13 @@
       0 0 0 var(--side-dark);
   }
 }
+
+button {
+  Padding: 0.5em;
+  color: #282c34;
+  font-size: large;
+  font-weight: 600;
+  background: linear-gradient(#fcbd00, #cf9b01);
+  border-radius: 5px;
+  border-color: #000000;
+}
