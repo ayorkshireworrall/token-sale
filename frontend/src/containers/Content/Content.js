@@ -7,6 +7,7 @@ import { getOrCreateAssociatedTokenAccount, TOKEN_PROGRAM_ID } from "@solana/spl
 import Coin from "../../components/Coin/Coin";
 import NewSaleForm from "../../components/NewSaleForm/NewSaleForm";
 import SaleList from "../../components/SaleList/SaleList";
+import { Config } from "../../config";
 import idl from '../../idl.json';
 import classes from './Content.module.css';
 
@@ -82,8 +83,7 @@ const Content = props => {
                 utils.bytes.utf8.encode('escrow_pda'),
                 utils.bytes.utf8.encode(saleFormData.name)
             ], program.programId);
-            // FIXME: suspect the way the token address is used is causing this to fail
-            const mint = new PublicKey("6D6Fn877PhAg6sHoftnDq6YdfCBZPeSb4y1dXa4BmX3W"); // currently just use address of a fixed token
+            const mint = new PublicKey(Config.tokenAddress); // currently just use address of a fixed token
             const [escrowTokenAccount] = PublicKey.findProgramAddressSync(
                 [
                     provider.wallet.publicKey.toBuffer(),
@@ -94,6 +94,7 @@ const Content = props => {
             );
             const adminTokenAccount = await getOrCreateAssociatedTokenAccount(provider.connection, provider.wallet, mint, provider.wallet.publicKey);
 
+            // FIXME: Signature verification failing
             await program.methods
                 .initialize(new BN(saleFormData.supply), new BN(saleFormData.rate), saleFormData.name)
                 .accounts({
